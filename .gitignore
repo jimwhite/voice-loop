@@ -3,3 +3,13 @@ tmp/
 __pycache__/
 *.pyc
 MEMORY.md
+
+# macOS build artifacts (Briefcase)
+macOS/
+build/
+dist/
+*.dmg
+*.app
+
+# Python packaging
+*.egg-info/

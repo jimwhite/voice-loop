@@ -15,4 +15,43 @@ dependencies = [
     "torch>=2.0",          # used by silero-vad (pulled in transitively but declared explicitly)
     "kokoro-onnx>=0.4",    # TTS (default on)
     "soundfile>=0.12",     # TTS audio I/O
+    "fastmcp>=3.0",        # MCP server framework
+]
+
+[project.scripts]
+voice-loop = "voice_loop_mac:main"
+voice-loop-mcp = "mcp_server:run_mcp_server"
+
+# ---------------------------------------------------------------------------
+# Briefcase (macOS .app packaging)
+# ---------------------------------------------------------------------------
+[tool.briefcase]
+project_name = "VoiceLoop"
+bundle = "com.voiceloop"
+version = "0.1.0"
+url = "https://github.com/jimwhite/voice-loop"
+license = "Apache-2.0"
+author = "Voice Loop Contributors"
+
+[tool.briefcase.app.voiceloop]
+formal_name = "Voice Loop"
+description = "On-device voice interface for coding agents"
+sources = ["voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
+requires = [
+    "sounddevice>=0.5",
+    "numpy>=2.1",
+    "silero-vad>=5.1",
+    "onnxruntime>=1.17",
+    "moonshine-voice>=0.0.40,<0.0.55",
+    "livekit>=1.1.5",
+    "transformers>=4.40",
+    "torch>=2.0",
+    "kokoro-onnx>=0.4",
+    "soundfile>=0.12",
+    "fastmcp>=3.0",
+]
+
+[tool.briefcase.app.voiceloop.macOS]
+requires = [
+    "mlx-vlm>=0.4.3",        # MLX needs Apple Silicon — macOS only
 ]
