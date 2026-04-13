@@ -52,15 +52,20 @@ def _fade_tone(freq, dur, amp=0.6):
 def _silence(dur):
     return np.zeros(int(dur * CHIME_SR), dtype=np.float32)
 
-def make_chime(duration=30.0, tick_every=1.5, tick_start=1.2):
-    """Two-tone chime + periodic ticks while generating. Single buffer → one sd.play()."""
+def make_chime(duration=30.0, tick_every=1.5):
+    """Two-tone chime that dissolves into periodic ticks. Single buffer → one sd.play().
+
+    No long silent gap between chime and first tick, so the mic's AGC doesn't
+    ramp up and spike the first tick.
+    """
     head = np.concatenate([_fade_tone(880, 0.09), _silence(0.03), _fade_tone(1320, 0.10)])
     tick = _fade_tone(660, 0.08, amp=0.35)
     total = int(duration * CHIME_SR)
     buf = np.zeros(total, dtype=np.float32)
     buf[:len(head)] = head
+    # First tick at end of chime; step thereafter
     step = int(tick_every * CHIME_SR)
-    for pos in range(int(tick_start * CHIME_SR), total, step):
+    for pos in range(len(head), total, step):
         end = min(pos + len(tick), total)
         buf[pos:end] = tick[:end - pos]
     return buf
@@ -113,8 +118,8 @@ def main():
     ap.add_argument("--tts", action=B, default=True, help="Kokoro TTS output")
     ap.add_argument("--smart-turn", action=B, default=True, help="Smart Turn v3 endpoint detection")
     ap.add_argument("--aec", action=B, default=True, help="WebRTC AEC3 voice interrupt")
-    ap.add_argument("--chime", action="store_true",
-                    help="Play chime on utterance + soft ticks while generating")
+    ap.add_argument("--chime", action=B, default=True,
+                    help="Chime on utterance + soft ticks while generating (default: on)")
     ap.add_argument("--memory", action="store_true",
                     help="Read/write MEMORY.md (auto-update durable facts, consolidate every 5 turns)")
     ap.add_argument("--audio-mode", action="store_true", help="Send audio directly to Gemma (experimental)")
