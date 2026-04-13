@@ -30,13 +30,13 @@ project_name = "VoiceLoop"
 bundle = "com.voiceloop"
 version = "0.1.0"
 url = "https://github.com/jimwhite/voice-loop"
-license = "Apache-2.0"
+license.file = "LICENSE"
 author = "Voice Loop Contributors"
 
 [tool.briefcase.app.voiceloop]
 formal_name = "Voice Loop"
 description = "On-device voice interface for coding agents"
-sources = ["voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
+sources = ["voiceloop", "voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
 requires = [
     "sounddevice>=0.5",
     "numpy>=2.1",
