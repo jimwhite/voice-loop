@@ -31,6 +31,8 @@ from fastmcp import FastMCP
 # ---------------------------------------------------------------------------
 # Safety constants
 # ---------------------------------------------------------------------------
+# Safety: cap speech length to prevent TTS resource exhaustion and limit
+# the surface area for any text-based attacks. 2000 chars ≈ 30s of speech.
 MAX_SPEAK_LENGTH = 2000  # characters
 # Control chars except common whitespace (tab, newline, carriage return)
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
