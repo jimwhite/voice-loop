@@ -27,6 +27,9 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+# Larger audio buffer → robust to MLX CPU saturation during generation.
+sd.default.latency = 'high'
+sd.default.blocksize = 2048
 import torch
 
 SAMPLE_RATE = 16000
@@ -65,6 +68,18 @@ def make_chime(duration=30.0, tick_every=1.5):
         end = min(pos + len(tick), total)
         buf[pos:end] = tick[:end - pos]
     return buf
+
+def _lang_from_voice(v: str) -> str:
+    """Infer Kokoro lang code from voice prefix.
+    a* = US English, b* = UK English, e* = Spanish, f* = French,
+    h* = Hindi, i* = Italian, j* = Japanese, p* = Portuguese, z* = Chinese."""
+    prefix = v[:1] if len(v) > 1 and v[1] == '_' else ''
+    return {
+        'a': 'en-us', 'b': 'en-gb',
+        'e': 'es', 'f': 'fr-fr', 'h': 'hi',
+        'i': 'it', 'j': 'ja', 'p': 'pt-br', 'z': 'cmn',
+    }.get(prefix, 'en-us')
+
 
 def save_wav(audio, sr=SAMPLE_RATE):
     path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
@@ -216,7 +231,7 @@ def main():
         return r.text if hasattr(r, "text") else str(r)
 
     def speak_tts(text):
-        samples, sr = kokoro.create(text, voice=args.voice, speed=1.0, lang="en-us")
+        samples, sr = kokoro.create(text, voice=args.voice, speed=1.0, lang=_lang_from_voice(args.voice))
         sd.play(samples, sr); sd.wait()
 
     _mem_path = _DIR / "MEMORY.md"
@@ -270,9 +285,27 @@ def main():
         sp = load_system_prompt(include_memory=args.memory)
         return [{"role": "system", "content": sp}] if sp else []
 
+    def _wait_for_chime_gap():
+        """Wait until we're in a silent gap between ticks, so sd.stop() doesn't
+        clip a tick mid-cycle (which clicks). Max wait ~40ms."""
+        if chime_sound is None or chime_started_at[0] == 0:
+            return
+        CHIME_HEAD = 0.22  # end of chime tones in buffer
+        TICK_DUR = 0.04    # tick length
+        TICK_EVERY = 1.5
+        t = _time.monotonic() - chime_started_at[0]
+        if t < CHIME_HEAD:
+            # Still in chime head; wait for end of chime then it's safe
+            _time.sleep(CHIME_HEAD - t)
+            return
+        phase = (t - CHIME_HEAD) % TICK_EVERY
+        if phase < TICK_DUR:
+            # In a tick — wait until it ends
+            _time.sleep(TICK_DUR - phase + 0.005)
+
     def play_tts_stream(response):
         drain_audio_q()
-        tts_stream = kokoro.create_stream(response, voice=args.voice, speed=1.0, lang="en-us")
+        tts_stream = kokoro.create_stream(response, voice=args.voice, speed=1.0, lang=_lang_from_voice(args.voice))
         out_stream, interrupted = None, False
         tts_16k_buf: list[np.ndarray] = []
         state = {"play_start": None, "consec_speech": 0, "mic_pos": 0}
@@ -304,6 +337,7 @@ def main():
             async for chunk_samples, sr in tts_stream:
                 if out_stream is None:
                     if chime_sound is not None:
+                        _wait_for_chime_gap()
                         sd.stop()
                     out_stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32")
                     out_stream.start()
@@ -341,6 +375,7 @@ def main():
         if chime_sound is not None:
             print("  *chime*", flush=True)
             sd.play(chime_sound, CHIME_SR)
+            chime_started_at[0] = _time.monotonic()
         wav_path = save_wav(audio) if args.audio_mode else None
         try:
             messages = _sys_messages()
@@ -362,6 +397,7 @@ def main():
             if kokoro and response:
                 play_tts_stream(response)
             elif chime_sound is not None:
+                _wait_for_chime_gap()
                 sd.stop()
             history.append({"user": heard, "assistant": response})
             if len(history) > MAX_HISTORY:
@@ -377,6 +413,7 @@ def main():
                 os.unlink(wav_path)
 
     history, buf = [], []
+    chime_started_at = [0.0]  # monotonic time when last chime started (for tick-boundary TTS start)
     speaking, silent_chunks = False, 0
 
     # Set terminal to raw mode so keypress interrupts work without Enter
