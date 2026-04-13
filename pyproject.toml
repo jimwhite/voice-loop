@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "voice-loop"
 version = "0.1.0"
@@ -21,6 +25,9 @@ dependencies = [
 [project.scripts]
 voice-loop = "voice_loop_mac:main"
 voice-loop-mcp = "mcp_server:run_mcp_server"
+
+[tool.setuptools.packages.find]
+include = ["voiceloop*", "backends*"]
 
 # ---------------------------------------------------------------------------
 # Briefcase (macOS .app packaging)
