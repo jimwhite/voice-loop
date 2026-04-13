@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Voice Loop LaunchAgent — auto-starts the MCP server at login.
+
+  Install:
+    cp com.voiceloop.mcp.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.voiceloop.mcp.plist
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.voiceloop.mcp.plist
+    rm ~/Library/LaunchAgents/com.voiceloop.mcp.plist
+
+  NOTE: Adjust ProgramArguments paths to match your installation.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.voiceloop.mcp</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Update these paths to match your uv / Python installation -->
+        <string>/usr/local/bin/uv</string>
+        <string>run</string>
+        <string>mcp_server.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Applications/Voice Loop.app/Contents/Resources</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/voiceloop-mcp-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/voiceloop-mcp-stderr.log</string>
+</dict>
+</plist>

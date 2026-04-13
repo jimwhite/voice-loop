@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Voice Loop — macOS sandbox entitlements.
+
+  The app only needs microphone input, audio output (implicit), and network
+  access for first-run model downloads.  No file-system exceptions, no
+  subprocess execution of user/agent-provided content.
+-->
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox — required for distribution outside the Mac App Store
+         when combined with code signing + notarisation. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- Microphone access (audio input) -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- Outbound network — needed to download models on first launch
+         and to communicate with coding agents over localhost MCP. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Read/write user-selected files (SOUL.md, MEMORY.md via open panel) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>
