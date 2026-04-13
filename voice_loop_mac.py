@@ -270,16 +270,9 @@ def main():
         sp = load_system_prompt(include_memory=args.memory)
         return [{"role": "system", "content": sp}] if sp else []
 
-    def _split_sentences(text):
-        """Quick sentence splitter for faster TTS time-to-first-audio."""
-        import re
-        # Split after ., !, ? when followed by space or end. Keep the delimiter.
-        parts = re.split(r"(?<=[.!?])\s+", text.strip())
-        return [p for p in parts if p]
-
     def play_tts_stream(response):
         drain_audio_q()
-        sentences = _split_sentences(response)
+        tts_stream = kokoro.create_stream(response, voice=args.voice, speed=1.0, lang="en-us")
         out_stream, interrupted = None, False
         tts_16k_buf: list[np.ndarray] = []
         state = {"play_start": None, "consec_speech": 0, "mic_pos": 0}
@@ -308,35 +301,31 @@ def main():
 
         async def _play():
             nonlocal out_stream, interrupted
-            for sentence in sentences:
-                if interrupted:
-                    break
-                tts_stream = kokoro.create_stream(sentence, voice=args.voice, speed=1.0, lang="en-us")
-                async for chunk_samples, sr in tts_stream:
-                    if out_stream is None:
-                        if chime_sound is not None:
-                            sd.stop()
-                        out_stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32")
-                        out_stream.start()
-                        drain_audio_q(); vad.reset_states()
-                        state["play_start"] = _time.monotonic()
-                    if aec_process is not None:
-                        if sr == SAMPLE_RATE:
-                            tts_16k_buf.append(chunk_samples.astype(np.float32))
-                        else:
-                            idx = np.arange(0, len(chunk_samples), sr / SAMPLE_RATE)
-                            tts_16k_buf.append(np.interp(idx, np.arange(len(chunk_samples)), chunk_samples).astype(np.float32))
-                    data = chunk_samples.reshape(-1, 1)
-                    for i in range(0, len(data), 4096):
-                        if select.select([sys.stdin], [], [], 0)[0]:
-                            sys.stdin.read(1); interrupted = True
-                        elif check_barge_in():
-                            interrupted = True; print("  [voice interrupt]", flush=True)
-                        if interrupted:
-                            break
-                        out_stream.write(data[i:i+4096])
+            async for chunk_samples, sr in tts_stream:
+                if out_stream is None:
+                    if chime_sound is not None:
+                        sd.stop()
+                    out_stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32")
+                    out_stream.start()
+                    drain_audio_q(); vad.reset_states()
+                    state["play_start"] = _time.monotonic()
+                if aec_process is not None:
+                    if sr == SAMPLE_RATE:
+                        tts_16k_buf.append(chunk_samples.astype(np.float32))
+                    else:
+                        idx = np.arange(0, len(chunk_samples), sr / SAMPLE_RATE)
+                        tts_16k_buf.append(np.interp(idx, np.arange(len(chunk_samples)), chunk_samples).astype(np.float32))
+                data = chunk_samples.reshape(-1, 1)
+                for i in range(0, len(data), 4096):
+                    if select.select([sys.stdin], [], [], 0)[0]:
+                        sys.stdin.read(1); interrupted = True
+                    elif check_barge_in():
+                        interrupted = True; print("  [voice interrupt]", flush=True)
                     if interrupted:
                         break
+                    out_stream.write(data[i:i+4096])
+                if interrupted:
+                    break
             if out_stream:
                 out_stream.stop(); out_stream.close()
 
