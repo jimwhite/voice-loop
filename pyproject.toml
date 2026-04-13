@@ -59,6 +59,7 @@ requires = [
 ]
 
 [tool.briefcase.app.voiceloop.macOS]
+deployment_target = "15.0"    # Sequoia+ — moonshine-voice wheels require macOS 15
 requires = [
     "mlx-vlm>=0.4.3",        # MLX needs Apple Silicon — macOS only
 ]
