@@ -1,7 +1,7 @@
 # Voice Loop macOS Build & DMG
 #
 # Builds Voice Loop as a macOS .app (via Briefcase) and wraps it in a .dmg.
-# Runs on Apple Silicon (macos-14 = M1 runner).
+# Runs on Apple Silicon (macos-15 = M-series runner, macOS 15 Sequoia).
 #
 # Trigger: push to main, tags, or manual dispatch.
 
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14   # Apple Silicon (M1)
+    runs-on: macos-15   # Apple Silicon (macOS 15 Sequoia — required for moonshine-voice wheels)
     timeout-minutes: 30
 
     steps:
