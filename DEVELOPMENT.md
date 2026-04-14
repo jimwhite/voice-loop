@@ -66,28 +66,36 @@ This is the recommended workflow for day-to-day development in VS Code or any ed
 Use [Briefcase](https://briefcase.readthedocs.io/) to build a native macOS `.app` bundle:
 
 ```bash
-# Install Briefcase (pin rich to avoid version conflict)
+# Install Briefcase (pin rich to avoid version conflict with 0.4.x)
 pip install "rich<15.0" briefcase
 
 # One-time: create the app scaffold
 briefcase create macOS app
 
-# Build the app
+# Build the GUI app
 briefcase build macOS app -a voiceloop
+
+# Build the Console CLI app
+briefcase build macOS app -a voiceloop_cli
 ```
 
-The built app is at: `build/voiceloop/macos/app/Voice Loop.app`
+The built apps are at:
+- GUI: `build/voiceloop/macos/app/Voice Loop.app`
+- CLI: `build/voiceloop_cli/macos/app/Voice Loop CLI.app`
 
 ### Run the built app
 
 ```bash
-# Via Briefcase (opens the .app)
+# GUI — Via Briefcase
 briefcase run macOS app -a voiceloop
 
-# Or directly from terminal
+# CLI — Via Briefcase
+briefcase run macOS app -a voiceloop_cli
+
+# Or directly from terminal (GUI)
 open "build/voiceloop/macos/app/Voice Loop.app"
 
-# Or from the command line to see stdout/stderr
+# Or from the command line to see stdout/stderr (GUI)
 "build/voiceloop/macos/app/Voice Loop.app/Contents/MacOS/Voice Loop"
 ```
 
@@ -96,9 +104,13 @@ open "build/voiceloop/macos/app/Voice Loop.app"
 After editing source files, rebuild without re-creating the scaffold:
 
 ```bash
-# Update sources and rebuild
+# Update sources and rebuild (GUI)
 briefcase update macOS app -a voiceloop
 briefcase build macOS app -a voiceloop
+
+# Update sources and rebuild (CLI)
+briefcase update macOS app -a voiceloop_cli
+briefcase build macOS app -a voiceloop_cli
 ```
 
 Or use **dev mode** which runs your code directly from source (no .app bundle, but uses Briefcase's dependency resolution):
@@ -157,7 +169,7 @@ For actual code editing, VS Code with the Python extension is the recommended ID
 
 ### `rich` version conflict with Briefcase
 
-Briefcase 0.4.x requires `rich<15.0`. If you see a compatibility error, pin rich:
+Briefcase 0.4.x requires `rich<15.0`. If you see a compatibility error, pin rich when installing:
 
 ```bash
 pip install "rich<15.0" briefcase

@@ -3,10 +3,16 @@
 Provides a native macOS window with settings, Run/Stop controls,
 and a scrolling log area.  Model downloads are deferred until the
 user presses **Run**.
+
+The voice loop itself runs the same ``run_loop()`` function as the CLI —
+only the I/O hooks (logging, stop signal, keypress) differ.
 """
 
+import argparse
 import os
+import sys
 import threading
+import traceback
 from pathlib import Path
 
 import toga
@@ -121,7 +127,10 @@ class VoiceLoopApp(toga.App):
     def on_exit(self):
         self._stop_event.set()
         if self._loop_thread:
-            self._loop_thread.join(timeout=3)
+            self._loop_thread.join(timeout=5)
+        # sounddevice / model threads can keep the process alive
+        if self._loop_thread and self._loop_thread.is_alive():
+            os._exit(1)
         return True
 
     # ── Widget callbacks ──────────────────────────────────────────────
@@ -172,6 +181,7 @@ class VoiceLoopApp(toga.App):
     # ── Thread-safe helpers ───────────────────────────────────────────
 
     def _log_msg(self, text):
+        print(text, file=sys.stderr, flush=True)
         self.loop.call_soon_threadsafe(self._append_log, text)
 
     def _append_log(self, text):
@@ -183,6 +193,12 @@ class VoiceLoopApp(toga.App):
     def _update_status(self, text):
         self.status.text = text
 
+    def _show_error_dialog(self, title, message):
+        """Show a native error dialog on the main thread."""
+        async def _show():
+            await self.main_window.error_dialog(title, message)
+        self.loop.call_soon_threadsafe(self.loop.create_task, _show())
+
     def _finish(self):
         self._running = False
         self.run_btn.enabled = True
@@ -190,127 +206,39 @@ class VoiceLoopApp(toga.App):
 
     # ── Voice loop (runs in a daemon thread) ──────────────────────────
 
-    def _voice_loop(self, s):          # noqa: C901  (complexity OK)
-        import numpy as np
-
+    def _voice_loop(self, s):
+        """Thin wrapper: builds an argparse Namespace and delegates to run_loop()."""
         try:
-            self._log_msg("Loading models\u2026")
             self._set_status("Loading models\u2026")
 
-            from voice_pipeline import (
-                VoicePipeline, SAMPLE_RATE, CHUNK_SAMPLES, _vad_prob,
+            args = argparse.Namespace(
+                tts=s["tts"],
+                smart_turn=s["smart_turn"],
+                aec=s["aec"],
+                chime=s["chime"],
+                voice=s["voice"],
+                silence_ms=s["silence_ms"],
+                memory=s["memory"],
+                model=s["model"],
+                backend=s["backend"],
+                audio_mode=False,
+                record=None,
+                data_dir=Path(__file__).resolve().parent.parent,
             )
 
-            data_dir = Path(__file__).resolve().parent.parent
-            pipeline = VoicePipeline(
-                tts=s["tts"], smart_turn=s["smart_turn"], aec=s["aec"],
-                chime=s["chime"], voice=s["voice"],
-                silence_ms=s["silence_ms"], data_dir=data_dir,
+            from voice_loop_mac import run_loop
+
+            run_loop(
+                args,
+                log=self._log_msg,
+                stop_check=self._stop_event.is_set,
+                allow_keypress=False,
             )
-
-            if s["backend"] == "mcp-server":
-                self._log_msg("MCP-server backend is not available in GUI mode.")
-                return
-
-            from backends.local import LocalBackend
-            backend = LocalBackend(model_name=s["model"])
-
-            self._log_msg("Models loaded.")
-            self._set_status("Listening")
-
-            mem_path = data_dir / "MEMORY.md"
-            MAX_HISTORY = 10
-
-            def _sys():
-                sp = pipeline.load_system_prompt(include_memory=s["memory"])
-                return [{"role": "system", "content": sp}] if sp else []
-
-            # ─ greeting ─
-            greeting = backend.generate(
-                _sys() + [{"role": "user", "content": (
-                    "Greet the user as Voice Loop in one short sentence. "
-                    "If my name is in memory, use it and ask how you can help. "
-                    "Otherwise, ask for my name."
-                )}],
-                max_tokens=60,
-            )
-            self._log_msg(f"> {greeting}")
-            if pipeline.kokoro:
-                pipeline.speak_tts_sync(greeting)
-
-            history: list[dict] = []
-            buf: list = []
-            speaking, silent_chunks = False, 0
-
-            with pipeline.start_mic_stream():
-                while not self._stop_event.is_set():
-                    try:
-                        chunk = pipeline.audio_q.get(timeout=0.2)
-                    except Exception:
-                        continue
-                    if len(chunk) < CHUNK_SAMPLES:
-                        continue
-
-                    prob = _vad_prob(pipeline.vad, chunk)
-                    if prob > 0.5:
-                        if not speaking:
-                            speaking = True
-                            self._log_msg("[listening\u2026]")
-                        silent_chunks = 0
-                        buf.append(chunk)
-                    elif speaking:
-                        silent_chunks += 1
-                        buf.append(chunk)
-                        if silent_chunks < pipeline.silence_limit:
-                            continue
-                        if pipeline.smart_turn_fn and buf:
-                            tp = pipeline.smart_turn_fn(np.concatenate(buf))
-                            self._log_msg(f"  [turn prob: {tp:.2f}]")
-                            if tp < 0.5:
-                                silent_chunks = 0
-                                continue
-
-                        # ── process utterance ──
-                        audio = np.concatenate(buf)
-                        self._log_msg(f"  ({len(audio) / SAMPLE_RATE:.1f}s)")
-                        pipeline.play_chime()
-                        try:
-                            heard = pipeline.transcribe(audio)
-                            self._log_msg(f"  [{heard}]")
-                            msgs = _sys()
-                            for h in history[-MAX_HISTORY:]:
-                                msgs += [
-                                    {"role": "user", "content": h["user"]},
-                                    {"role": "assistant", "content": h["assistant"]},
-                                ]
-                            msgs.append({"role": "user", "content": heard})
-                            resp = backend.generate(msgs)
-                            self._log_msg(f"\n> {resp}")
-                            if pipeline.kokoro and resp:
-                                pipeline.play_tts_stream(resp)
-                            else:
-                                pipeline.stop_chime()
-                            history.append({"user": heard, "assistant": resp})
-                            if len(history) > MAX_HISTORY:
-                                history.pop(0)
-                            if s["memory"]:
-                                def _rm():
-                                    return mem_path.read_text() if mem_path.exists() else "# Memory\n"
-                                backend.update_memory(heard, resp, mem_path, _rm)
-                                if len(history) % 5 == 0:
-                                    backend.consolidate_memory(mem_path, _rm)
-                        except Exception as e:
-                            self._log_msg(f"Error: {e}")
-                        buf.clear()
-                        speaking, silent_chunks = False, 0
-                        pipeline.vad.reset_states()
-
-            pipeline.shutdown()
-            self._log_msg("Stopped.")
         except Exception as e:
+            tb = traceback.format_exc()
             self._log_msg(f"Fatal: {e}")
-            import traceback
-            self._log_msg(traceback.format_exc())
+            self._log_msg(tb)
+            self._show_error_dialog("Voice Loop Error", str(e))
         finally:
             self._set_status("Stopped")
             self.loop.call_soon_threadsafe(self._finish)
