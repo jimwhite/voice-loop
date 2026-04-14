@@ -135,6 +135,10 @@ cp com.voiceloop.mcp.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.voiceloop.mcp.plist
 ```
 
+## Local Development
+
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for instructions on building and testing locally on your Mac (VS Code, Briefcase dev mode, local DMG builds, self-hosted runners).
+
 ## macOS App (.dmg)
 
 The GitHub Actions workflow builds a macOS `.app` bundle via Briefcase and packages it as a `.dmg`:
@@ -214,6 +218,7 @@ voice-loop/
 ├── com.voiceloop.mcp.plist # LaunchAgent for auto-start
 ├── SOUL.md                 # Persona / style
 ├── MEMORY.md.example       # Memory template
+├── DEVELOPMENT.md          # Local dev setup (VS Code, Briefcase, DMG)
 ├── pyproject.toml          # Dependencies + Briefcase config
 └── .github/workflows/
     └── build.yml           # macOS build + DMG CI
