@@ -73,7 +73,7 @@ pip install "rich<15.0" briefcase
 briefcase create macOS app
 
 # Build the app
-briefcase build macOS app
+briefcase build macOS app -a voiceloop
 ```
 
 The built app is at: `build/voiceloop/macos/app/Voice Loop.app`
@@ -82,7 +82,7 @@ The built app is at: `build/voiceloop/macos/app/Voice Loop.app`
 
 ```bash
 # Via Briefcase (opens the .app)
-briefcase run macOS app
+briefcase run macOS app -a voiceloop
 
 # Or directly from terminal
 open "build/voiceloop/macos/app/Voice Loop.app"
@@ -97,8 +97,8 @@ After editing source files, rebuild without re-creating the scaffold:
 
 ```bash
 # Update sources and rebuild
-briefcase update macOS app
-briefcase build macOS app
+briefcase update macOS app -a voiceloop
+briefcase build macOS app -a voiceloop
 ```
 
 Or use **dev mode** which runs your code directly from source (no .app bundle, but uses Briefcase's dependency resolution):

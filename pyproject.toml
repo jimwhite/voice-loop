@@ -22,6 +22,7 @@ dependencies = [
     "fastmcp>=3.0",        # MCP server framework
     "certifi>=2024.0",     # CA certs for Briefcase-bundled Python (no system store)
     "typer>=0.9",          # CLI framework (Briefcase console app)
+    "toga>=0.4",           # GUI framework (Briefcase GUI app)
 ]
 
 [project.scripts]
@@ -29,7 +30,7 @@ voice-loop = "voice_loop_mac:main"
 voice-loop-mcp = "mcp_server:run_mcp_server"
 
 [tool.setuptools.packages.find]
-include = ["voiceloop*", "backends*"]
+include = ["voiceloop*", "voiceloop_cli*", "backends*"]
 
 # ---------------------------------------------------------------------------
 # Briefcase (macOS .app packaging)
@@ -42,11 +43,44 @@ url = "https://github.com/jimwhite/voice-loop"
 license.file = "LICENSE"
 author = "Voice Loop Contributors"
 
+# ---------------------------------------------------------------------------
+# GUI app — Toga-based native macOS window
+# ---------------------------------------------------------------------------
 [tool.briefcase.app.voiceloop]
 formal_name = "Voice Loop"
 description = "On-device voice interface for coding agents"
+sources = ["voiceloop", "voiceloop_cli", "voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
+requires = [
+    "sounddevice>=0.5",
+    "numpy>=2.1",
+    "silero-vad>=5.1",
+    "onnxruntime>=1.17",
+    "moonshine-voice>=0.0.40,<0.0.55",
+    "livekit>=1.1.5",
+    "transformers>=4.40",
+    "torch>=2.0",
+    "kokoro-onnx>=0.4",
+    "soundfile>=0.12",
+    "fastmcp>=3.0",
+    "certifi>=2024.0",
+    "toga>=0.4",
+]
+
+[tool.briefcase.app.voiceloop.macOS]
+min_os_version = "15.0"      # Sequoia+ — moonshine-voice wheels require macOS 15
+universal_build = false       # ARM-only — mlx/mlx-metal have no x86_64 wheels
+requires = [
+    "mlx-vlm>=0.4.3",        # MLX needs Apple Silicon — macOS only
+]
+
+# ---------------------------------------------------------------------------
+# Console app — Typer CLI
+# ---------------------------------------------------------------------------
+[tool.briefcase.app.voiceloop_cli]
+formal_name = "Voice Loop CLI"
+description = "On-device voice interface for coding agents (CLI)"
 console_app = true
-sources = ["voiceloop", "voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
+sources = ["voiceloop_cli", "voiceloop", "voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
 requires = [
     "sounddevice>=0.5",
     "numpy>=2.1",
@@ -63,9 +97,9 @@ requires = [
     "typer>=0.9",
 ]
 
-[tool.briefcase.app.voiceloop.macOS]
-min_os_version = "15.0"      # Sequoia+ — moonshine-voice wheels require macOS 15
-universal_build = false       # ARM-only — mlx/mlx-metal have no x86_64 wheels
+[tool.briefcase.app.voiceloop_cli.macOS]
+min_os_version = "15.0"
+universal_build = false
 requires = [
-    "mlx-vlm>=0.4.3",        # MLX needs Apple Silicon — macOS only
+    "mlx-vlm>=0.4.3",
 ]
