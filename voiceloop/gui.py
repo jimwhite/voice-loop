@@ -9,6 +9,7 @@ only the I/O hooks (logging, stop signal, keypress) differ.
 """
 
 import argparse
+import asyncio
 import os
 import sys
 import threading
@@ -33,7 +34,7 @@ class VoiceLoopApp(toga.App):
 
     def startup(self):
         self._stop_event = threading.Event()
-        self._loop_thread = None
+        self._task = None
         self._running = False
 
         # ── Settings ──────────────────────────────────────────────────
@@ -124,14 +125,13 @@ class VoiceLoopApp(toga.App):
         self.main_window.content = outer
         self.main_window.show()
 
-    def on_exit(self):
+    async def on_exit(self):
         self._stop_event.set()
-        if self._loop_thread:
-            self._loop_thread.join(timeout=5)
-        # sounddevice / model threads can keep the process alive
-        if self._loop_thread and self._loop_thread.is_alive():
-            os._exit(1)
-        return True
+        # Give the voice loop thread a moment to notice the stop event.
+        await asyncio.sleep(0.5)
+        # sounddevice / MLX model threads keep the process alive;
+        # force-kill so the app doesn't linger as a zombie.
+        os._exit(0)
 
     # ── Widget callbacks ──────────────────────────────────────────────
 
@@ -169,10 +169,7 @@ class VoiceLoopApp(toga.App):
             backend=str(self.backend_sel.value),
         )
 
-        self._loop_thread = threading.Thread(
-            target=self._voice_loop, args=(cfg,), daemon=True,
-        )
-        self._loop_thread.start()
+        self._task = asyncio.create_task(self._voice_loop(cfg))
 
     def _on_stop(self, widget):
         self._stop_event.set()
@@ -180,7 +177,7 @@ class VoiceLoopApp(toga.App):
 
     # ── Thread-safe helpers ───────────────────────────────────────────
 
-    def _log_msg(self, text):
+    def _log_msg(self, text, **_kw):
         print(text, file=sys.stderr, flush=True)
         self.loop.call_soon_threadsafe(self._append_log, text)
 
@@ -204,10 +201,10 @@ class VoiceLoopApp(toga.App):
         self.run_btn.enabled = True
         self.stop_btn.enabled = False
 
-    # ── Voice loop (runs in a daemon thread) ──────────────────────────
+    # ── Voice loop (async task → background thread) ─────────────────────
 
-    def _voice_loop(self, s):
-        """Thin wrapper: builds an argparse Namespace and delegates to run_loop()."""
+    async def _voice_loop(self, s):
+        """Async task: builds args, runs the blocking voice loop in a thread."""
         try:
             self._set_status("Loading models\u2026")
 
@@ -226,14 +223,7 @@ class VoiceLoopApp(toga.App):
                 data_dir=Path(__file__).resolve().parent.parent,
             )
 
-            from voice_loop_mac import run_loop
-
-            run_loop(
-                args,
-                log=self._log_msg,
-                stop_check=self._stop_event.is_set,
-                allow_keypress=False,
-            )
+            await asyncio.to_thread(self._voice_loop_thread, args)
         except Exception as e:
             tb = traceback.format_exc()
             self._log_msg(f"Fatal: {e}")
@@ -241,7 +231,27 @@ class VoiceLoopApp(toga.App):
             self._show_error_dialog("Voice Loop Error", str(e))
         finally:
             self._set_status("Stopped")
-            self.loop.call_soon_threadsafe(self._finish)
+            self._finish()
+
+    def _voice_loop_thread(self, args):
+        """Run in a thread-pool thread via asyncio.to_thread.
+
+        Toga's cocoa backend installs a process-wide Cocoa event-loop policy
+        (rubicon-objc).  play_tts_stream() calls asyncio.run() which needs a
+        standard selector-based event loop — not a Cocoa one that requires a
+        CFRunLoop on the current thread.  Resetting the policy here is safe
+        because Toga's main-thread loop is already created and running.
+        """
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
+        from voice_loop_mac import run_loop
+
+        run_loop(
+            args,
+            log=self._log_msg,
+            stop_check=self._stop_event.is_set,
+            allow_keypress=False,
+        )
 
 
 def main():
