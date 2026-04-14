@@ -4,6 +4,11 @@ Must run before ANY import that opens HTTPS connections or loads kokoro_onnx.
 """
 
 import os
+import sys
+
+
+def _log(msg):
+    print(f"[bootstrap] {msg}", file=sys.stderr, flush=True)
 
 
 def bootstrap():
@@ -26,16 +31,30 @@ def bootstrap():
     except ImportError:
         pass
 
-    # ── Resource tracker deadlock workaround ──
-    # Python 3.12 added ResourceTracker.__del__ (cpython#88887) which calls
-    # os.waitpid() at interpreter shutdown.  PyTorch triggers the resource
-    # tracker via shared memory.  The __del__ deadlocks because the tracker's
-    # pipe fd is still open when waitpid blocks (cpython#146313).  The fix
-    # landed in 3.13/3.14 but has NOT been backported to 3.12.
-    # Workaround from CPython core dev (gpshead):
+    # ── Disable multiprocessing resource tracker ──
+    # In a Briefcase macOS app, sys.executable is the stub binary, which
+    # runs runpy._run_module_as_main() and ignores Python's -c flag.
+    # When resource_tracker.ensure_running() fork+exec's sys.executable
+    # with '-c "from multiprocessing.resource_tracker import main;main(fd)"',
+    # the stub re-launches the entire Toga GUI — causing a second Dock icon.
+    #
+    # The Python framework in the bundle is a dylib (not an executable),
+    # so there's no real Python interpreter to point multiprocessing at.
+    #
+    # This app uses threads (not multiprocessing workers), so the resource
+    # tracker serves no purpose.  Disable it entirely — the OS reclaims
+    # all resources on process exit.
     try:
         import multiprocessing.resource_tracker as _rt
+        tracker = _rt._resource_tracker
+        # Prevent the tracker from fork+exec'ing the Briefcase stub
+        tracker.ensure_running = lambda: None
+        # No-op register/unregister so callers don't error writing to a closed fd
+        tracker.register = lambda name, rtype: None
+        tracker.unregister = lambda name, rtype: None
+        # Also remove __del__ to prevent deadlock at shutdown (cpython#88887)
         if hasattr(_rt.ResourceTracker, "__del__"):
             del _rt.ResourceTracker.__del__
-    except Exception:
-        pass
+        _log("Disabled multiprocessing resource tracker (Briefcase stub workaround)")
+    except Exception as e:
+        _log(f"Resource tracker patch error: {e}")

@@ -132,32 +132,10 @@ class VoiceLoopApp(toga.App):
             sd.stop()
         except Exception:
             pass
+
         if self._loop_thread and self._loop_thread.is_alive():
             self._loop_thread.join(timeout=5.0)
-        # Explicitly shut down the multiprocessing resource_tracker if PyTorch
-        # started one.  Close the pipe fd first (so the tracker sees EOF and
-        # exits), then reap the child process.  Reset state so that the
-        # (now-deleted) ResourceTracker.__del__ is a no-op even if it somehow
-        # still exists on a future Python patch.
-        try:
-            import signal
-            from multiprocessing.resource_tracker import _resource_tracker
-            pid = getattr(_resource_tracker, "_pid", None)
-            fd = getattr(_resource_tracker, "_fd", None)
-            if pid is not None:
-                _resource_tracker._pid = None
-                _resource_tracker._fd = None
-                if fd is not None:
-                    try:
-                        os.close(fd)
-                    except OSError:
-                        pass
-                try:
-                    os.waitpid(pid, os.WNOHANG)
-                except ChildProcessError:
-                    pass
-        except Exception:
-            pass
+
         return True
 
     # ── Widget callbacks ──────────────────────────────────────────────
