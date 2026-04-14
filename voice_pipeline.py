@@ -573,4 +573,4 @@ class VoicePipeline:
             )
 
     def shutdown(self):
-        self.executor.shutdown(wait=False)
+        self.executor.shutdown(wait=False, cancel_futures=True)

@@ -25,3 +25,17 @@ def bootstrap():
         os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeakng_loader.get_library_path()
     except ImportError:
         pass
+
+    # ── Resource tracker deadlock workaround ──
+    # Python 3.12 added ResourceTracker.__del__ (cpython#88887) which calls
+    # os.waitpid() at interpreter shutdown.  PyTorch triggers the resource
+    # tracker via shared memory.  The __del__ deadlocks because the tracker's
+    # pipe fd is still open when waitpid blocks (cpython#146313).  The fix
+    # landed in 3.13/3.14 but has NOT been backported to 3.12.
+    # Workaround from CPython core dev (gpshead):
+    try:
+        import multiprocessing.resource_tracker as _rt
+        if hasattr(_rt.ResourceTracker, "__del__"):
+            del _rt.ResourceTracker.__del__
+    except Exception:
+        pass
