@@ -20,6 +20,7 @@ dependencies = [
     "kokoro-onnx>=0.4",    # TTS (default on)
     "soundfile>=0.12",     # TTS audio I/O
     "fastmcp>=3.0",        # MCP server framework
+    "certifi>=2024.0",     # CA certs for Briefcase-bundled Python (no system store)
 ]
 
 [project.scripts]
@@ -56,6 +57,7 @@ requires = [
     "kokoro-onnx>=0.4",
     "soundfile>=0.12",
     "fastmcp>=3.0",
+    "certifi>=2024.0",
 ]
 
 [tool.briefcase.app.voiceloop.macOS]
