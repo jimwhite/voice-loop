@@ -9,6 +9,7 @@ only the I/O hooks (logging, stop signal, keypress) differ.
 """
 
 import argparse
+import atexit
 import asyncio
 import os
 import sys
@@ -36,6 +37,10 @@ class VoiceLoopApp(toga.App):
         self._stop_event = threading.Event()
         self._task = None
         self._running = False
+
+        # Ensure the process actually dies when Toga exits.
+        # Cocoa / sounddevice / MLX threads can keep it alive otherwise.
+        atexit.register(lambda: os._exit(0))
 
         # ── Settings ──────────────────────────────────────────────────
         settings = toga.Box(style=Pack(direction=COLUMN, padding=10))
@@ -125,13 +130,9 @@ class VoiceLoopApp(toga.App):
         self.main_window.content = outer
         self.main_window.show()
 
-    async def on_exit(self):
+    def on_exit(self):
         self._stop_event.set()
-        # Give the voice loop thread a moment to notice the stop event.
-        await asyncio.sleep(0.5)
-        # sounddevice / MLX model threads keep the process alive;
-        # force-kill so the app doesn't linger as a zombie.
-        os._exit(0)
+        return True
 
     # ── Widget callbacks ──────────────────────────────────────────────
 

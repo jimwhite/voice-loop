@@ -348,7 +348,7 @@ class VoicePipeline:
         sd.play(samples, sr)
         sd.wait()
 
-    def play_tts_stream(self, response: str, allow_keypress_interrupt: bool = True) -> bool:
+    def play_tts_stream(self, response: str, allow_keypress_interrupt: bool = True, stop_check=None) -> bool:
         """Stream TTS with AEC and voice-interrupt support. Returns True if interrupted."""
         if not self.kokoro:
             return False
@@ -413,7 +413,9 @@ class VoicePipeline:
                         )
                 data = chunk_samples.reshape(-1, 1)
                 for i in range(0, len(data), 4096):
-                    if allow_keypress_interrupt and select.select([sys.stdin], [], [], 0)[0]:
+                    if stop_check and stop_check():
+                        interrupted = True
+                    elif allow_keypress_interrupt and select.select([sys.stdin], [], [], 0)[0]:
                         sys.stdin.read(1)
                         interrupted = True
                     elif check_barge_in():

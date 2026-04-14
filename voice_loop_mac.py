@@ -98,7 +98,7 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
                 log(f"  [{heard}]")
             log(f"\n> {response}\n")
             if pipeline.kokoro and response:
-                pipeline.play_tts_stream(response, allow_keypress_interrupt=allow_keypress)
+                pipeline.play_tts_stream(response, allow_keypress_interrupt=allow_keypress, stop_check=stop_check)
             else:
                 pipeline.stop_chime()
             history.append({"user": heard, "assistant": response})
