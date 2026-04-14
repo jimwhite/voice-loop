@@ -38,8 +38,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install briefcase
-          pip install -e .
+          pip install briefcase -e .
 
       - name: Create macOS app (Briefcase)
         run: |
