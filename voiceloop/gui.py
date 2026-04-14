@@ -9,7 +9,6 @@ only the I/O hooks (logging, stop signal, keypress) differ.
 """
 
 import argparse
-import atexit
 import asyncio
 import os
 import sys
@@ -35,12 +34,8 @@ class VoiceLoopApp(toga.App):
 
     def startup(self):
         self._stop_event = threading.Event()
-        self._task = None
+        self._loop_thread = None
         self._running = False
-
-        # Ensure the process actually dies when Toga exits.
-        # Cocoa / sounddevice / MLX threads can keep it alive otherwise.
-        atexit.register(lambda: os._exit(0))
 
         # ── Settings ──────────────────────────────────────────────────
         settings = toga.Box(style=Pack(direction=COLUMN, padding=10))
@@ -170,7 +165,10 @@ class VoiceLoopApp(toga.App):
             backend=str(self.backend_sel.value),
         )
 
-        self._task = asyncio.create_task(self._voice_loop(cfg))
+        self._loop_thread = threading.Thread(
+            target=self._voice_loop, args=(cfg,), daemon=True,
+        )
+        self._loop_thread.start()
 
     def _on_stop(self, widget):
         self._stop_event.set()
@@ -202,10 +200,19 @@ class VoiceLoopApp(toga.App):
         self.run_btn.enabled = True
         self.stop_btn.enabled = False
 
-    # ── Voice loop (async task → background thread) ─────────────────────
+    # ── Voice loop (daemon thread) ──────────────────────────────────────
 
-    async def _voice_loop(self, s):
-        """Async task: builds args, runs the blocking voice loop in a thread."""
+    def _voice_loop(self, s):
+        """Thread target: builds an argparse Namespace and delegates to run_loop().
+
+        Toga's cocoa backend installs a process-wide Cocoa event-loop policy
+        (rubicon-objc).  play_tts_stream() calls asyncio.run() which needs a
+        standard selector-based event loop — not a Cocoa one that requires a
+        CFRunLoop on the current thread.  Resetting the policy here is safe
+        because Toga's main-thread loop is already created and running.
+        """
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
         try:
             self._set_status("Loading models\u2026")
 
@@ -224,7 +231,14 @@ class VoiceLoopApp(toga.App):
                 data_dir=Path(__file__).resolve().parent.parent,
             )
 
-            await asyncio.to_thread(self._voice_loop_thread, args)
+            from voice_loop_mac import run_loop
+
+            run_loop(
+                args,
+                log=self._log_msg,
+                stop_check=self._stop_event.is_set,
+                allow_keypress=False,
+            )
         except Exception as e:
             tb = traceback.format_exc()
             self._log_msg(f"Fatal: {e}")
@@ -232,27 +246,7 @@ class VoiceLoopApp(toga.App):
             self._show_error_dialog("Voice Loop Error", str(e))
         finally:
             self._set_status("Stopped")
-            self._finish()
-
-    def _voice_loop_thread(self, args):
-        """Run in a thread-pool thread via asyncio.to_thread.
-
-        Toga's cocoa backend installs a process-wide Cocoa event-loop policy
-        (rubicon-objc).  play_tts_stream() calls asyncio.run() which needs a
-        standard selector-based event loop — not a Cocoa one that requires a
-        CFRunLoop on the current thread.  Resetting the policy here is safe
-        because Toga's main-thread loop is already created and running.
-        """
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
-
-        from voice_loop_mac import run_loop
-
-        run_loop(
-            args,
-            log=self._log_msg,
-            stop_check=self._stop_event.is_set,
-            allow_keypress=False,
-        )
+            self.loop.call_soon_threadsafe(self._finish)
 
 
 def main():
