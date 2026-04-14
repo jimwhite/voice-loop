@@ -60,6 +60,7 @@ requires = [
 
 [tool.briefcase.app.voiceloop.macOS]
 min_os_version = "15.0"      # Sequoia+ — moonshine-voice wheels require macOS 15
+universal_build = false       # ARM-only — mlx/mlx-metal have no x86_64 wheels
 requires = [
     "mlx-vlm>=0.4.3",        # MLX needs Apple Silicon — macOS only
 ]
