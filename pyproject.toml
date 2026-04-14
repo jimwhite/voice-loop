@@ -21,6 +21,7 @@ dependencies = [
     "soundfile>=0.12",     # TTS audio I/O
     "fastmcp>=3.0",        # MCP server framework
     "certifi>=2024.0",     # CA certs for Briefcase-bundled Python (no system store)
+    "typer>=0.9",          # CLI framework (Briefcase console app)
 ]
 
 [project.scripts]
@@ -44,6 +45,7 @@ author = "Voice Loop Contributors"
 [tool.briefcase.app.voiceloop]
 formal_name = "Voice Loop"
 description = "On-device voice interface for coding agents"
+console_app = true
 sources = ["voiceloop", "voice_loop_mac.py", "voice_pipeline.py", "mcp_server.py", "backends"]
 requires = [
     "sounddevice>=0.5",
@@ -58,6 +60,7 @@ requires = [
     "soundfile>=0.12",
     "fastmcp>=3.0",
     "certifi>=2024.0",
+    "typer>=0.9",
 ]
 
 [tool.briefcase.app.voiceloop.macOS]

@@ -21,6 +21,19 @@ if not _os.environ.get("SSL_CERT_FILE"):
     except ImportError:
         pass  # certifi unavailable — fall back to system defaults
 
+# ---------------------------------------------------------------------------
+# espeak-ng bootstrap — must run before kokoro_onnx is imported.
+#
+# The bundled espeakng_loader wheel ships libespeak-ng.dylib + data.  Force
+# PHONEMIZER_ESPEAK_LIBRARY to point there so kokoro_onnx never falls back to
+# a brew path that doesn't exist inside the Briefcase bundle.
+# ---------------------------------------------------------------------------
+try:
+    import espeakng_loader as _espeakng
+    _os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = _espeakng.get_library_path()
+except ImportError:
+    pass
+
 from voiceloop.app import main
 
 if __name__ == "__main__":

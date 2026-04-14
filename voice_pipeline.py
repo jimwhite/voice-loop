@@ -221,13 +221,14 @@ class VoicePipeline:
         self.kokoro = None
         if tts:
             print("Loading Kokoro TTS...", flush=True)
-            # kokoro-onnx uses espeakng_loader which bundles libespeak-ng.dylib.
-            # Only fall back to brew if the bundled loader is unavailable.
-            if not os.environ.get("PHONEMIZER_ESPEAK_LIBRARY"):
-                try:
-                    import espeakng_loader
-                    os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeakng_loader.get_library_path()
-                except ImportError:
+            # Always prefer the bundled espeakng_loader (ships libespeak-ng.dylib).
+            # This overrides any stale PHONEMIZER_ESPEAK_LIBRARY that may point
+            # at a brew path unavailable inside a Briefcase .app / .pkg bundle.
+            try:
+                import espeakng_loader
+                os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeakng_loader.get_library_path()
+            except ImportError:
+                if not os.environ.get("PHONEMIZER_ESPEAK_LIBRARY"):
                     import subprocess
                     try:
                         prefix = subprocess.check_output(
