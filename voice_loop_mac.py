@@ -47,6 +47,16 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
 
     data_dir = getattr(args, "data_dir", _DIR)
 
+    # Request mic permission early so the macOS dialog appears before the
+    # heavy model-loading phase — the user can approve while models download.
+    import sounddevice as _sd
+    try:
+        with _sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                             blocksize=CHUNK_SAMPLES):
+            pass
+    except Exception:
+        pass
+
     # --- Build pipeline ---
     log("Loading models…")
     pipeline = VoicePipeline(

@@ -127,6 +127,20 @@ class VoiceLoopApp(toga.App):
 
     def on_exit(self):
         self._stop_event.set()
+        # Immediately stop any sd.play()/sd.wait() playback (e.g. greeting TTS)
+        # so the voice-loop thread can proceed to its cleanup path.
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
+        # Wait for the voice-loop thread to finish its cleanup: closing the
+        # sd.OutputStream (portaudio native thread), the mic InputStream, and
+        # calling pipeline.shutdown().  Without this, native portaudio threads
+        # keep the process alive, the resource_tracker pipe stays open, and
+        # the child process lingers.
+        if self._loop_thread and self._loop_thread.is_alive():
+            self._loop_thread.join(timeout=5.0)
         return True
 
     # ── Widget callbacks ──────────────────────────────────────────────
@@ -172,6 +186,13 @@ class VoiceLoopApp(toga.App):
 
     def _on_stop(self, widget):
         self._stop_event.set()
+        # Stop sd.play()/sd.wait() immediately (greeting TTS).
+        # play_tts_stream uses its own OutputStream and checks stop_check.
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
         self._set_status("Stopping\u2026")
 
     # ── Thread-safe helpers ───────────────────────────────────────────
