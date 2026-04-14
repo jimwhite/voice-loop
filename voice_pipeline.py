@@ -23,6 +23,21 @@ import numpy as np
 import sounddevice as sd
 
 sd.default.latency = "high"
+
+
+def _voiceloop_cache(subdir: str = "") -> str:
+    """Return a persistent, macOS-appropriate cache directory for VoiceLoop.
+
+    Uses ~/Library/Caches/VoiceLoop on macOS (survives reboots, unlike /tmp).
+    Falls back to ~/.cache/voiceloop on other platforms.
+    """
+    if sys.platform == "darwin":
+        base = os.path.join(os.path.expanduser("~"), "Library", "Caches", "VoiceLoop")
+    else:
+        base = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "voiceloop")
+    path = os.path.join(base, subdir) if subdir else base
+    os.makedirs(path, exist_ok=True)
+    return path
 import torch
 
 SAMPLE_RATE = 16000
@@ -206,21 +221,24 @@ class VoicePipeline:
         self.kokoro = None
         if tts:
             print("Loading Kokoro TTS...", flush=True)
-            import subprocess
-
-            try:
-                prefix = subprocess.check_output(
-                    ["brew", "--prefix", "espeak-ng"], text=True
-                ).strip()
-                os.environ.setdefault(
-                    "PHONEMIZER_ESPEAK_LIBRARY",
-                    f"{prefix}/lib/libespeak-ng.dylib",
-                )
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                pass
+            # kokoro-onnx uses espeakng_loader which bundles libespeak-ng.dylib.
+            # Only fall back to brew if the bundled loader is unavailable.
+            if not os.environ.get("PHONEMIZER_ESPEAK_LIBRARY"):
+                try:
+                    import espeakng_loader
+                    os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeakng_loader.get_library_path()
+                except ImportError:
+                    import subprocess
+                    try:
+                        prefix = subprocess.check_output(
+                            ["brew", "--prefix", "espeak-ng"], text=True
+                        ).strip()
+                        os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = f"{prefix}/lib/libespeak-ng.dylib"
+                    except (FileNotFoundError, subprocess.CalledProcessError):
+                        pass
             from kokoro_onnx import Kokoro
 
-            cache_dir = os.path.join(tempfile.gettempdir(), "kokoro_tts")
+            cache_dir = _voiceloop_cache("kokoro_tts")
             model_file = os.path.join(cache_dir, "kokoro-v1.0.onnx")
             voices_file = os.path.join(cache_dir, "voices-v1.0.bin")
             if not os.path.exists(model_file):
