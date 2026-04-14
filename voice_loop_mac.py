@@ -43,7 +43,7 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
                          Set ``False`` for GUI (no stdin).
     """
     if log is None:
-        log = lambda t: print(t, flush=True)  # noqa: E731
+        log = lambda t, **kw: print(t, flush=True, **kw)  # noqa: E731
 
     data_dir = getattr(args, "data_dir", _DIR)
 
@@ -109,7 +109,7 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
                 if len(history) % 5 == 0:
                     backend.consolidate_memory(_mem_path, _read_memory)
         except Exception as e:
-            log(f"\nError: {e}\n")
+            print(f"\nError: {e}\n", file=sys.stderr)
         finally:
             if wav_path:
                 os.unlink(wav_path)
@@ -158,7 +158,7 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
                 if speech_prob > 0.5:
                     if not speaking:
                         speaking = True
-                        log("[listening...]")
+                        log("[listening...]", end="")
                     silent_chunks = 0
                     buf.append(chunk)
                 elif speaking:
@@ -168,7 +168,7 @@ def run_loop(args, *, log=None, stop_check=None, allow_keypress=True):
                         continue
                     if pipeline.smart_turn_fn and buf:
                         prob = pipeline.smart_turn_fn(np.concatenate(buf))
-                        log(f" [turn prob: {prob:.2f}]")
+                        log(f" [turn prob: {prob:.2f}]", end="")
                         if prob < 0.5:
                             silent_chunks = 0
                             continue
